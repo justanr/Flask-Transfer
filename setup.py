@@ -33,10 +33,11 @@ if __name__ == "__main__":
         description='Validate and process file uploads in Flask easily',
         license='MIT',
         packages=['flask_transfer'],
+        zip_safe=False,
         url="https://github.com/justanr/Flask-Transfer",
         keywords=['flask', 'uploads'],
-        classifers=[
-            'Development Status :: 3 - Alpha'
+        classifiers=[
+            'Development Status :: 3 - Alpha',
             'Framework :: Flask',
             'Environment :: Web Environment',
             'Intended Audience :: Developers',
@@ -44,6 +45,7 @@ if __name__ == "__main__":
             'Programming Language :: Python :: 2.7',
             'Programming Language :: Python :: 3.4'
         ],
+        install_requires=['Flask'],
         test_suite='test',
         tests_require=['pytest'],
         cmdclass={'test': PyTest},
