@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block title %}PDF Uploader{% endblock %}
+
+{% block content %}
+<div class="jumbotron">
+    <div class="container">
+        <h1>Ready to semi-webscale?!</h1>
+        <p>Upload your crappy PDF and get a wonderful semi-webscale JPG!</p>
+        {{ wtf.quick_form(form, enctype="multipart/form-data") }}
+    </div>
+</div>
+{% endblock %}

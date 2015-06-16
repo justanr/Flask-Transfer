@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Welcome to jpegr{% endblock %}
+
+
+{% block content %}
+<div class="jumbotron">
+    <div class="container">
+    {{ util.flashed_messages() }}
+    </div>
+    <div class="container">
+        <h1>jpegr: A PDF to JPG converter as a service</h1>
+        <p>jpegr takes your crummy non-webscale PDF and converts it into a beautiful, if slightly grainy, Web1.0 JPG image</p>
+        <p><a href="{{ url_for('upload') }}" class="btn btn-primary btn-lg" role="buton">Convert your crappy PDF</a></p>
+        <ul class="list-group">
+            {% for link in links %}
+            <li class="list-group-item">
+                <a href="{{ link }}">View a converted PDF!</a>
+            </li>
+            {% else %}
+            <li class="list-group-item list-group-item-info">
+                Unbelievable! There are no converted PDFs!
+            </li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endblock %}
