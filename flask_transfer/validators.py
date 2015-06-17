@@ -1,9 +1,5 @@
 """
-    flask_transfer.validators
-    ~~~~~~~~~~~~~~~~~~~~~~~~~
-    Built in validators for flask_transfer.
 """
-
 from functools import update_wrapper
 from os.path import splitext
 from .exc import UploadError
@@ -11,8 +7,13 @@ from .exc import UploadError
 
 class BaseValidator(object):
     """BaseValidator class for flask_transfer. Provides utility methods for
-    combining validators together. Subclasses should implement `_validates`
+    combining validators together. Subclasses should implement `_validates`.
+
+    When called, the validator will catch TypeError and ValueError wrap them
+    in UploadError. Other validators should explictly catch expected error and
+    reraise UploadError.
     """
+
     def _validate(self, filehandle, metadata):
         raise NotImplementedError("_validate not implemented")
 
@@ -35,7 +36,10 @@ class BaseValidator(object):
 class AndValidator(BaseValidator):
     """Validator representing a condition where both validators must be true.
     flask_transfer validators can be combined in this fashion with the bitwise
-    & operator.::
+    `&` operator.
+
+    .. code-block:: python
+
         # trivial example: An existing set of allowed extensions
         # combined with a new set of denied extensions
         Images = AllowedExts("jpg", "gif", "png", "psd") # etc
@@ -57,7 +61,10 @@ class AndValidator(BaseValidator):
 class OrValidator(BaseValidator):
     """Validator representing a condition where either validator must be true.
     flask_transfer validators can be combined in this fashion with the bitwise
-    | operator.::
+    `|` operator.
+
+    .. code-block:: python
+
         Images = AllowedExts("jpg", "gif", "png")
         Text = AllowedExts("txt", "json", "md", "rst")
         ImagesOrText = Images | Text
@@ -77,12 +84,16 @@ class OrValidator(BaseValidator):
 class NegatedValidator(BaseValidator):
     """Validators that represents the opposite of its internal validator.
     flask_transfer validators can be negated in this fashion with the bitwise
-    ~ unary operator.::
+    `~` unary operator.
+
+    .. code-block:: python
+
         Images = AllowedExts("jpg", "png", "gif")
-        NoImages = ~Images # same as creating DeniedExts("jpg", "png", "gif")
+        # same as creating DeniedExts("jpg", "png", "gif")
+        NoImages = ~Images
 
     :NOTE: `~` was chosen because it is *always* unary, unlike `-` which might
-    be an unary or a binary operator.
+        be an unary or a binary operator.
     """
     def __init__(self, validator):
         self._validator = validator
@@ -97,14 +108,19 @@ class NegatedValidator(BaseValidator):
 class FunctionValidator(BaseValidator):
     """flask_transfer validator used to lift a function into the validator
     environment, allowing it to access the &, | and ~ shortcuts for combination
-    and negation. FunctionValidator presents as the wrapped function.::
+    and negation. FunctionValidator presents as the wrapped function.
+
+    .. code-block:: python
 
         def check_filename_length(filehandle):
             return len(filehandle.name) >= 5
 
         CheckFilenameLength = FunctionValidator(check_filename_length)
 
-    FunctionValidator can also be used a decorator as well::
+    FunctionValidator can also be used a decorator as well
+
+    .. code-block:: python
+
         @FunctionValidator
         def check_filename_length(filehandle):
             return len(filehandle.name) >= 5
@@ -139,12 +155,16 @@ class ExtValidator(BaseValidator):
 
 
 class AllowedExts(ExtValidator):
-    """Filename extension validator that whitelights certain extensions::
-        >>> Images = AllowedExts("jpg", "png", "gif")
-        >>> Images._validate(DummyFile("awesome.png"))
-        >>> True
-        >>> Images._validate(DummyFile("sadface.psd"))
-        >>> False
+    """Filename extension validator that whitelights certain extensions
+
+    .. code-block:: python
+
+        ImagesAllowed = AllowedExts('jpg', 'png', 'gif')
+        ImagesAllowed(DummyFile(name='awesome.jpg'), {})
+        # True
+        ImagesAllowed(DummyFile('awesome.psd'), {})
+        # UploadError(awesome.psd has an invalid extension...)
+
     """
     def _validate(self, filehandle, metadata):
         if not self._getext(filehandle.filename) in self.exts:
@@ -156,12 +176,16 @@ class AllowedExts(ExtValidator):
 
 
 class DeniedExts(ExtValidator):
-    """Filename extension validator that blacklists certain extensions::
-        >>> DeniedDocuments = DeniedExts("doc", "xls")
-        >>> DeniedDocumentss._validate(DummyFile("nope.doc"))
-        >>> False
-        >>> DeniedDocuments._validate(DummyFile("okay.odt"))
-        >>> True
+    """Filename extension validator that blacklists certain extensions
+
+    .. code-block:: python
+
+        DocumentsDenied = DeniedExts('doc', 'xls', 'ppt')
+        DocumentsDenied(DummyFile('awesome.pdf'), {})
+        # True
+        DocumentsDenied(DummyFile('awesome.ppt'), {})
+        # UploadError(awesome.ppt has an invalid extension...)
+
     """
     def _validate(self, filehandle, metadata):
         if self._getext(filehandle.filename) in self.exts:
@@ -174,8 +198,8 @@ class DeniedExts(ExtValidator):
 
 # just a little dynamic instance creation, nothing to see here.
 AllowAll = type('All', (BaseValidator,), {'_validate': lambda *a, **k: True,
-                                          '__repr__': lambda _: 'All'})()
+                                          '__repr__': lambda _: 'All',
+                                          '__doc__': 'Allows everything.'})()
 DenyAll = type('Deny', (BaseValidator,), {'_validate': lambda *a, **k: False,
-                                          '__repr__': lambda _: 'Deny'})()
-AllowAll.__doc__ = 'Okays everything passed to it.'
-DenyAll.__doc__ = 'Denies everything passed to it.'
+                                          '__repr__': lambda _: 'Deny',
+                                          '__doc__': 'Denies everything.'})()

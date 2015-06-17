@@ -1,3 +1,2 @@
 class UploadError(Exception):
-    """Error thrown if a validation fails.
-    """
+    "Base exception for Flask-Transfer"
