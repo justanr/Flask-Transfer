@@ -1,0 +1,63 @@
+{% extends "bootstrap/base.html" %}
+{% import "bootstrap/wtf.html" as wtf %}
+{% import "bootstrap/fixes.html" as fixes %}
+{% import "bootstrap/utils.html" as util %}
+
+
+{% block title %}Allotr{% endblock %}
+
+{% block content %}
+<div class="jumbotron">
+    <div class="container">
+        {{ util.flashed_messages() }}
+    </div>
+    <div class="container">
+        <h1>Allotr</h1>
+        <p>Flask will allow you to reject files that exceed a certain file size.
+        But Flask-Transfer will allow you to create a check that will reject
+        files that cause a directory to grow beyond a certain size.</p>
+        <h2>Try It Out</h2>
+        <p>Upload some files, but once a file causes the upload directory to
+        exceed 20 kilobytes, you'll get an error.</p>
+    </div>
+    <div class="container">
+        <h2>Upload a File</h3>
+        {{ wtf.quick_form(form, enctype="multipart/form-data") }}
+    </div>
+</div>
+
+<div class="container">
+    <div class="row">
+        <div class="col-md-4">
+            <h3>Source Code</h3>
+            <a href="https://github.com/justanr/Flask-Transfer/tree/master/examples/allotr">
+                <span class="glyphicon glyphicon-cloud"></span>
+                Github
+            </a>
+        </div>
+        <div class="col-md-4">
+            <h3>Total Upload Usages</h3>
+            <p>{{ current }}kb of {{ max }}kb</p>
+        </div>
+        <div class="col-md-4">
+            <h3>Files Uploaded</h3>
+            <ul>
+                {% for file in files %}
+                <li>{{ file }}</li>
+                {% else %}
+                <li>No files uploaded</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+<hr>
+<footer>
+    <p>Powered by <a href="flask.pocoo.org">Flask</a>
+    and <a href="https://github.com/justanr/Flask-Transfer">Flask-Transfer</a>
+    </p>
+</footer>
+
+</div>
+
+
+{% endblock %}
