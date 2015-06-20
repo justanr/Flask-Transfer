@@ -149,8 +149,8 @@ class AllowedExts(ExtValidator):
     def _validate(self, filehandle, metadata):
         if not self._getext(filehandle.filename) in self.exts:
             exts = ', '.join(self.exts)
-            raise UploadError("{} has an invalid extension. "
-                              "Extensions allowed {}"
+            raise UploadError("{0} has an invalid extension. "
+                              "Extensions allowed {1}"
                               "".format(filehandle.filename, exts))
         return True
 
@@ -166,8 +166,8 @@ class DeniedExts(ExtValidator):
     def _validate(self, filehandle, metadata):
         if self._getext(filehandle.filename) in self.exts:
             exts = ', '.join(self.exts)
-            raise UploadError("{} has an invalid extension. "
-                              "Extensions denied {}"
+            raise UploadError("{0} has an invalid extension. "
+                              "Extensions denied {1}"
                               "".format(filehandle.filename, exts))
         return True
 

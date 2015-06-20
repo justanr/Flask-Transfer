@@ -59,7 +59,7 @@ def test_make_destination_callable_raises():
 def test_writeable_saving():
     destination = BytesIO()
     filehandle = FileStorage(stream=BytesIO(b'hello world'))
-    transfer._use_filehandle_to_save(destination)(filehandle)
+    transfer._use_filehandle_to_save(destination)(filehandle, metadata={})
     destination.seek(0)
 
     assert destination.read() == b'hello world'
@@ -69,7 +69,7 @@ def test_string_path_saving(tmpdir):
     destination = tmpdir.join('test.txt')
     path = str(destination)
     filehandle = FileStorage(stream=BytesIO(b'hello world'))
-    transfer._use_filehandle_to_save(path)(filehandle)
+    transfer._use_filehandle_to_save(path)(filehandle, metadata={})
 
     assert destination.read(mode='rb') == b'hello world'
 

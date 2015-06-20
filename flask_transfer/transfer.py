@@ -9,9 +9,10 @@ from werkzeug._compat import string_types
 
 
 def _use_filehandle_to_save(dest):
-    def saver(filehandle, *args, **kwargs):
+    def saver(filehandle, metadata):
         "Uses the save method on the filehandle to save to the destination"
-        filehandle.save(dest, *args, **kwargs)
+        buffer_size = metadata.get('buffer_size', 16384)
+        filehandle.save(dest, buffer_size)
     return saver
 
 
@@ -154,8 +155,6 @@ class Transfer(object):
         :param metadata: Optional mapping of metadata to pass to pre and post
         processors.
         :param validate boolean: Toggle validation, defaults to True
-        :param args: Positional arguments to pass to destination callable
-        :param kwargs: Keyword arguments to pass to destination callable
         """
         destination = destination or self._destination
         if destination is None:
@@ -170,5 +169,5 @@ class Transfer(object):
             self._validate(filehandle, metadata)
 
         filehandle = self._preprocess(filehandle, metadata)
-        destination(filehandle, *args, **kwargs)
+        destination(filehandle, metadata)
         self._postprocess(filehandle, metadata)
