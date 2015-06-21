@@ -164,7 +164,7 @@ class Transfer(object):
         """
         destination = destination or self._destination
         if destination is None:
-            raise AttributeError("Destination for filehandle must be provided.")
+            raise RuntimeError("Destination for filehandle must be provided.")
 
         elif destination is not self._destination:
             destination = _make_destination_callable(destination)
