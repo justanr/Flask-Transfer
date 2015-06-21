@@ -132,7 +132,13 @@ class Transfer(object):
         return fn
 
     def _validate(self, filehandle, metadata):
-        "Runs all attached validators on the provided filehandle."
+        """Runs all attached validators on the provided filehandle.
+        In the base implmentation of Transfer, the result of `_validate` isn't
+        checked. Rather validators are expected to raise UploadError to report
+        failure.
+        """
+        # though do return the result to make testing
+        # and possible subclassing easier
         return all(validator(filehandle, metadata)
                    for validator in self._validators)
 
