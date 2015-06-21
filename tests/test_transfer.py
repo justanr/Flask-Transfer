@@ -1,4 +1,4 @@
-from flask_transfer import transfer
+from flask_transfer import transfer, UploadError
 from werkzeug import FileStorage
 import pytest
 
@@ -130,6 +130,33 @@ def test_Transfer_validate(transf):
 
     source = FileStorage(stream=BytesIO(b'Hello World'))
     assert transf._validate(source, {})
+
+
+def test_Transfer_validate_catch_all_errors(transf):
+    @transf.validator
+    @transf.validator
+    def derp(filehandle, meta):
+        raise UploadError('error')
+
+    with pytest.raises(UploadError) as excinfo:
+        transf._validate('', {}, catch_all_errors=True)
+
+    assert str(excinfo.value) == "('error', 'error')"
+
+
+def test_Transfer_validate_bail_on_first_error(transf):
+    counter = iter(range(2))
+
+    @transf.validator
+    @transf.validator
+    def derp(filehandle, meta):
+        raise UploadError(str(next(counter)))
+
+    with pytest.raises(UploadError) as excinfo:
+        transf._validate('', {}, catch_all_errors=False)
+
+    assert str(excinfo.value) == '0'
+    assert next(counter) == 1
 
 
 def test_Transfer_preprocess(transf):

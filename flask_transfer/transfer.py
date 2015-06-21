@@ -1,7 +1,7 @@
 __all__ = ['Transfer']
 
 from werkzeug._compat import string_types
-
+from .exc import UploadError
 
 def _use_filehandle_to_save(dest):
     def saver(filehandle, metadata):
@@ -131,16 +131,32 @@ class Transfer(object):
         self._postprocessors.append(fn)
         return fn
 
-    def _validate(self, filehandle, metadata):
+    def _validate(self, filehandle, metadata, catch_all_errors=False):
         """Runs all attached validators on the provided filehandle.
         In the base implmentation of Transfer, the result of `_validate` isn't
         checked. Rather validators are expected to raise UploadError to report
         failure.
+
+        `_validate` can optionally catch all UploadErrors that occur or bail out
+        and the first one by toggling the `catch_all_errors` flag. If
+        catch_all_errors is Truthy then a single UploadError is raised
+        consisting of all UploadErrors raised.
         """
-        # though do return the result to make testing
-        # and possible subclassing easier
-        return all(validator(filehandle, metadata)
-                   for validator in self._validators)
+        errors = []
+
+        for validator in self._validators:
+            try:
+                validator(filehandle, metadata)
+            except UploadError as err:
+                if not catch_all_errors:
+                    raise
+                else:
+                    errors.append(err)
+
+        if errors:
+            raise UploadError(*[str(e) for e in errors])
+        else:
+            return True
 
     def _preprocess(self, filehandle, metadata):
         "Runs all attached preprocessors on the provided filehandle."
@@ -155,7 +171,7 @@ class Transfer(object):
         return filehandle
 
     def save(self, filehandle, destination=None, metadata=None,
-             validate=True, *args, **kwargs):
+             validate=True, catch_all_errors=False, *args, **kwargs):
         """Saves the filehandle to the provided destination or the attached
         default destination. Allows passing arbitrary positional and keyword
         arguments to the saving mechanism
@@ -167,6 +183,9 @@ class Transfer(object):
         :param metadata: Optional mapping of metadata to pass to validators,
             preprocessors, and postprocessors.
         :param validate boolean: Toggle validation, defaults to True
+        :param catch_all_errors boolean: Toggles if validation should collect
+            all UploadErrors and raise a collected error message or bail out on
+            the first one.
         """
         destination = destination or self._destination
         if destination is None:
