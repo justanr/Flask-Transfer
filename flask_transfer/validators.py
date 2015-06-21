@@ -158,7 +158,7 @@ class FunctionValidator(BaseValidator):
         try:
             return self._func(filehandle, metadata)
         except self._errors as e:
-            raise UploadError(e)
+            raise UploadError(*e.args)
 
     def __repr__(self):
         catching = [e.__name__ for e in self._errors]

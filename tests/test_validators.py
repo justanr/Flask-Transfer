@@ -91,4 +91,29 @@ def test_FunctionValidator_converts_to_UploadError():
     with pytest.raises(UploadError) as excinfo:
         throw_an_error('', {})
 
-    assert str(excinfo.value) == 'what a test!'
+    assert excinfo.errisinstance(UploadError)
+    assert 'what a test!' == excinfo.value.args[0]
+
+
+@pytest.mark.parametrize('first, second, result', [
+    (True, True, True), (False, True, True),
+    (False, False, False), (True, False, True)
+])
+def test_OrValidator(first, second, result):
+    orer = validators.OrValidator(lambda f, m: first, lambda f, m: second)
+    assert orer('', {}) == result
+
+
+@pytest.mark.parametrize('first, second, result', [
+    (True, True, True), (False, False, False),
+    (True, False, False), (False, True, False)
+])
+def test_AndValidator(first, second, result):
+    ander = validators.AndValidator(lambda f, m: first, lambda f, m: second)
+    assert ander('', {}) == result
+
+
+def test_NegatedValidator():
+    negated = validators.NegatedValidator(lambda f, m: True)
+    assert not negated('', {})
+    assert validators.NegatedValidator(negated)('', {})
