@@ -106,16 +106,18 @@ class NegatedValidator(BaseValidator):
 
 
 class FunctionValidator(BaseValidator):
-    """flask_transfer validator used to lift a function into the validator
-    environment, allowing it to access the &, | and ~ shortcuts for combination
-    and negation. FunctionValidator presents as the wrapped function.
+    """Used to lift a function into the validator environment, allowing it to
+    access the &, | and ~ shortcuts for combination and negation.
+
+    FunctionValidator presents as the wrapped function.
 
     .. code-block:: python
 
         def check_filename_length(filehandle):
-            return len(filehandle.name) >= 5
+            return len(filehandle.filename) >= 5
 
         CheckFilenameLength = FunctionValidator(check_filename_length)
+        assert CheckFilenameLength.__name__ == check_filename__length.__name__
 
     FunctionValidator can also be used a decorator as well
 
@@ -123,23 +125,57 @@ class FunctionValidator(BaseValidator):
 
         @FunctionValidator
         def check_filename_length(filehandle):
-            return len(filehandle.name) >= 5
+            return len(filehandle.filename) >= 5
+
+    `FunctionValidator` can optionally accept exceptions to catch and convert
+    into `UploadErrors` as well. By default, FunctionValidator catches
+    TypeError and ValueError, so adding these are redundant.
+
+    .. code-block:: python
+
+        FunctionValidator(check_filename_length, IndexError, TypeError)
+
+
+    Additionally, individual errors can be added after the fact if needed. This
+    can be useful if `FunctionValidator` is used as a decorator, since the
+    errors are passed positionally.
+
+        .. code-block:: python
+
+        @FunctionValidator
+        def my_validator(filehandle, metadata):
+            raise ZeroDivisionError('an example')
+
+        my_validator.add_checked_exception(ZeroDivisionError)
+
     """
-    def __init__(self, func):
+    def __init__(self, func, *errors):
         update_wrapper(self, func)
         self._func = func
+        self._errors = (TypeError, ValueError) + errors
 
     def _validate(self, filehandle, metadata):
-        return self._func(filehandle, metadata)
+        try:
+            return self._func(filehandle, metadata)
+        except self._errors as e:
+            raise UploadError(e)
 
     def __repr__(self):
-        return "FunctionValidator({!r})".format(self._func)
+        catching = [e.__name__ for e in self._errors]
+        return "FunctionValidator({0!r}, catching={1})".format(self._func,
+                                                               catching)
+
+    def add_checked_exception(self, exception):
+        "Adds an exception type to catch and convert into an UploadError"
+        self._errors += (exception,)
 
 
 class ExtValidator(BaseValidator):
     """Base filename extension class. Extensions are lowercased and placed into
     a frozenset. Also defines a helper staticmethod `_getext` that extracts the
     lowercase extension from a filename.
+
+    Checked extensions should not have the dot included in them.
     """
     def __init__(self, *exts):
         self.exts = frozenset(map(str.lower, exts))

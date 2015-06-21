@@ -44,7 +44,8 @@ def test_FunctionValidator_wraps():
     checked = ('__name__', '__doc__', '__module__',
                '__qualname__', '__annotations__')
     wrapped = validators.FunctionValidator(filename_all_lower)
-    # __qualname__ and __annotations__ in Python 2.6/2.7
+
+    # fill in __qualname__ and __annotations__ in Python 2.6/2.7
     missing = object()
     assert all([getattr(wrapped, c, missing) ==
                 getattr(filename_all_lower, c, missing)
@@ -54,3 +55,40 @@ def test_FunctionValidator_wraps():
 def test_FunctionValidator_okays():
     wrapped = validators.FunctionValidator(filename_all_lower)
     assert wrapped._validate(DummyFile('awesome.jpg'), {})
+
+
+def test_FunctionValidator_as_decorator():
+    @validators.FunctionValidator
+    def my_func(filehandle, metadata):
+        pass
+
+    assert isinstance(my_func, validators.FunctionValidator)
+
+
+def test_FunctionValidator_accepts_errors_to_catch():
+    some_validator = validators.FunctionValidator(lambda x: x, ZeroDivisionError)
+
+    assert some_validator._errors == (TypeError, ValueError, ZeroDivisionError)
+
+
+def test_FunctionValidator_add_errors_after_creation():
+    some_validator = validators.FunctionValidator(lambda x: x)
+    some_validator.add_checked_exception(ZeroDivisionError)
+
+    assert ZeroDivisionError in some_validator._errors
+
+
+def test_FunctionValidator_converts_to_UploadError():
+    class MyException(Exception):
+        pass
+
+    @validators.FunctionValidator
+    def throw_an_error(filehandle, metadata):
+        raise MyException('what a test!')
+
+    throw_an_error.add_checked_exception(MyException)
+
+    with pytest.raises(UploadError) as excinfo:
+        throw_an_error('', {})
+
+    assert str(excinfo.value) == 'what a test!'
