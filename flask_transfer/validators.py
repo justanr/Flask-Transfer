@@ -165,9 +165,9 @@ class FunctionValidator(BaseValidator):
         return "FunctionValidator({0!r}, catching={1})".format(self._func,
                                                                catching)
 
-    def add_checked_exception(self, exception):
-        "Adds an exception type to catch and convert into an UploadError"
-        self._errors += (exception,)
+    def add_checked_exceptions(self, *exceptions):
+        "Adds exception types to catch and convert into an UploadError"
+        self._errors += exceptions
 
 
 class ExtValidator(BaseValidator):
@@ -234,8 +234,8 @@ class DeniedExts(ExtValidator):
 
 # just a little dynamic instance creation, nothing to see here.
 AllowAll = type('All', (BaseValidator,), {'_validate': lambda *a, **k: True,
-                                          '__repr__': lambda _: 'All',
+                                          '__repr__': lambda _: 'AllowAll',
                                           '__doc__': 'Allows everything.'})()
 DenyAll = type('Deny', (BaseValidator,), {'_validate': lambda *a, **k: False,
-                                          '__repr__': lambda _: 'Deny',
+                                          '__repr__': lambda _: 'DenyAll',
                                           '__doc__': 'Denies everything.'})()

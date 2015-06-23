@@ -3,21 +3,13 @@ __all__ = ['Transfer']
 from werkzeug._compat import string_types
 from .exc import UploadError
 
+
 def _use_filehandle_to_save(dest):
     def saver(filehandle, metadata):
         "Uses the save method on the filehandle to save to the destination"
         buffer_size = metadata.get('buffer_size', 16384)
         filehandle.save(dest, buffer_size)
     return saver
-
-
-def _make_destination_callable(dest):
-    if callable(dest):
-        return dest
-    elif hasattr(dest, 'write') or isinstance(dest, string_types):
-        return _use_filehandle_to_save(dest)
-    else:
-        raise TypeError("Destination must be a string, writable or callable object.")  #noqa
 
 
 class Transfer(object):
@@ -69,7 +61,7 @@ class Transfer(object):
     def __init__(self, destination=None, validators=None, preprocessors=None,
                  postprocessors=None):
         if destination is not None:
-            self._destination = _make_destination_callable(destination)
+            self._destination = self.postprocessor_make_destination_callable(destination) # noqa
         else:
             self._destination = None
         self._validators = validators or []
@@ -133,9 +125,8 @@ class Transfer(object):
 
     def _validate(self, filehandle, metadata, catch_all_errors=False):
         """Runs all attached validators on the provided filehandle.
-        In the base implmentation of Transfer, the result of `_validate` isn't
-        checked. Rather validators are expected to raise UploadError to report
-        failure.
+        The result of `_validate` isn't checked in `Transfer.save`, rather
+        validators are expected to raise UploadError to report failure.
 
         `_validate` can optionally catch all UploadErrors that occur or bail out
         and the first one by toggling the `catch_all_errors` flag. If
@@ -192,7 +183,7 @@ class Transfer(object):
             raise RuntimeError("Destination for filehandle must be provided.")
 
         elif destination is not self._destination:
-            destination = _make_destination_callable(destination)
+            destination = self._make_destination_callable(destination)
 
         if metadata is None:
             metadata = {}
@@ -203,3 +194,12 @@ class Transfer(object):
         filehandle = self._preprocess(filehandle, metadata)
         destination(filehandle, metadata)
         self._postprocess(filehandle, metadata)
+
+    @staticmethod
+    def _make_destination_callable(dest):
+        if callable(dest):
+            return dest
+        elif hasattr(dest, 'write') or isinstance(dest, string_types):
+            return _use_filehandle_to_save(dest)
+        else:
+            raise TypeError("Destination must be a string, writable or callable object.")  #noqa
