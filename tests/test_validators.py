@@ -14,6 +14,42 @@ def filename_all_lower(filehandle, metadata):
     return True
 
 
+def test_raise_with_unimplemented_validate():
+    class MyValidator(validators.BaseValidator):
+        pass
+
+    with pytest.raises(NotImplementedError) as excinfo:
+        MyValidator()('', {})
+
+    assert '_validate not implemented' == str(excinfo.value)
+
+
+def test_AndValidator_shortcut():
+    first = validators.BaseValidator()
+    second = validators.BaseValidator()
+    and_validator = first & second
+
+    assert isinstance(and_validator, validators.AndValidator)
+    assert and_validator._first is first and and_validator._second is second
+
+
+def test_OrValidator_shortcut():
+    first = validators.BaseValidator()
+    second = validators.BaseValidator()
+    or_validator = first | second
+
+    assert isinstance(or_validator, validators.OrValidator)
+    assert or_validator._first is first and or_validator._second is second
+
+
+def test_NegatedValidator_shortcut():
+    validator = validators.BaseValidator()
+    negated_validator = ~validator
+
+    assert isinstance(negated_validator, validators.NegatedValidator)
+    assert negated_validator._validator is validator
+
+
 def test_AllowedExts_raises():
     allowed = validators.AllowedExts('jpg')
     with pytest.raises(UploadError) as excinfo:
