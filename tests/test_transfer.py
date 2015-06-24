@@ -28,15 +28,12 @@ class ReportingTransfer(transfer.Transfer):
 
     def _validate(self, fh, meta):
         self._validated = True
-        return True
 
     def _preprocess(self, fh, meta):
         self._preprocessed = True
-        return fh
 
     def _postprocess(self, fh, meta):
         self._postprocessed = True
-        return fh
 
     def save(self, *args, **kwargs):
         def destination(filehandle, metadata):
@@ -44,6 +41,10 @@ class ReportingTransfer(transfer.Transfer):
 
         kwargs['destination'] = destination
         super(ReportingTransfer, self).save(*args, **kwargs)
+
+    def verify(self):
+        return self._validated and self._preprocessed and self._saved and \
+            self._postprocessed
 
 
 @pytest.mark.parametrize('save_to', [
@@ -204,11 +205,7 @@ def test_Transfer_postprocess(transf):
 def test_Transfer_save():
     t = ReportingTransfer()
     t.save('')
-
-    assert t._validated
-    assert t._preprocessed
-    assert t._saved
-    assert t._postprocessed
+    assert t.verify()
 
 
 def test_Transfer_save_toggle_validate():
