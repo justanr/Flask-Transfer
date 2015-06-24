@@ -1,0 +1,7 @@
+[report]
+exclude_lines = 
+    # re-enable default
+    pragma: no cover
+
+    # don't complain about reprs
+    def __repr__
