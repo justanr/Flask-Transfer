@@ -7,6 +7,11 @@ try:
 except ImportError:
     from BytesIO import BytesIO
 
+try:
+    from unittest import mock
+except ImportError:
+    import mock
+
 
 @pytest.fixture
 def transf():
@@ -34,7 +39,7 @@ class ReportingTransfer(transfer.Transfer):
         return fh
 
     def save(self, *args, **kwargs):
-        def destination(filehandle, *_, **__):
+        def destination(filehandle, metadata):
             self._saved = True
 
         kwargs['destination'] = destination
@@ -59,19 +64,23 @@ def test_make_destination_callable_raises():
 def test_writeable_saving():
     destination = BytesIO()
     filehandle = FileStorage(stream=BytesIO(b'hello world'))
-    transfer._use_filehandle_to_save(destination)(filehandle, metadata={})
-    destination.seek(0)
+    dummy_save = transfer._use_filehandle_to_save(destination)
 
-    assert destination.read() == b'hello world'
+    with mock.patch('werkzeug.FileStorage.save') as mocked_save:
+        dummy_save(filehandle, {'buffer_size': 1})
+
+    mocked_save.assert_called_with(destination, 1)
 
 
-def test_string_path_saving(tmpdir):
-    destination = tmpdir.join('test.txt')
-    path = str(destination)
-    filehandle = FileStorage(stream=BytesIO(b'hello world'))
-    transfer._use_filehandle_to_save(path)(filehandle, metadata={})
+def test_string_path_saving():
+    source = BytesIO()
+    filehandle = FileStorage(stream=source, filename='test.png')
+    dummy_save = transfer._use_filehandle_to_save('test.png')
 
-    assert destination.read(mode='rb') == b'hello world'
+    with mock.patch('werkzeug.FileStorage.save') as mocked_save:
+        dummy_save(filehandle, {'buffer_size': None})
+
+    mocked_save.assert_called_with('test.png', None)
 
 
 def test_Transfer_setup_blank():

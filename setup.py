@@ -2,6 +2,12 @@ from setuptools import setup
 from setuptools.command.test import test as TestCommand
 import sys
 
+try:
+    from unittest import mock
+    needs_mock = False
+except ImportError:
+    needs_mock = True
+
 
 class PyTest(TestCommand):
     # Taken from py.test setuptools integration page
@@ -46,6 +52,11 @@ class ToxTest(TestCommand):
         errno = tox.cmdline(args=args)
         sys.exit(errno)
 
+tests_require = ['pytest', 'tox']
+
+if needs_mock:
+    tests_require.append('mock')
+
 
 if __name__ == "__main__":
     setup(
@@ -70,6 +81,6 @@ if __name__ == "__main__":
         ],
         install_requires=['Flask'],
         test_suite='test',
-        tests_require=['tox', 'pytest'],
+        tests_require=tests_require,
         cmdclass={'pytest': PyTest, 'tox': ToxTest},
     )
