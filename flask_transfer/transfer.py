@@ -3,6 +3,7 @@ __all__ = ['Transfer']
 from werkzeug._compat import string_types
 from .exc import UploadError
 
+
 def _use_filehandle_to_save(dest):
     def saver(filehandle, metadata):
         "Uses the save method on the filehandle to save to the destination"
@@ -130,6 +131,13 @@ class Transfer(object):
         """
         self._postprocessors.append(fn)
         return fn
+
+    def destination(self, dest):
+        """Changes the default destination of the Transfer object. Can be used
+        as a standard method or as a decorator.
+        """
+        self._destination = _make_destination_callable(dest)
+        return dest
 
     def _validate(self, filehandle, metadata, catch_all_errors=False):
         """Runs all attached validators on the provided filehandle.

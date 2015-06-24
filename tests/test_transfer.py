@@ -123,6 +123,15 @@ def test_register_postprocessor(transf):
     assert len(transf._postprocessors) == 1
 
 
+
+def test_register_destination(transf):
+    @transf.destination
+    def save_path(filehandle, metadata):
+        pass
+
+    assert transf._destination is save_path
+
+
 def test_Transfer_save_raises_with_no_destination(transf):
     with pytest.raises(RuntimeError) as excinfo:
         transf.save(FileStorage(), destination=None)
