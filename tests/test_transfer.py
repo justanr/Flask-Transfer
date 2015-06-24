@@ -123,7 +123,6 @@ def test_register_postprocessor(transf):
     assert len(transf._postprocessors) == 1
 
 
-
 def test_register_destination(transf):
     @transf.destination
     def save_path(filehandle, metadata):
@@ -217,3 +216,14 @@ def test_Transfer_save_toggle_validate():
     t.save('', validate=False)
 
     assert not t._validated
+
+
+def test_Transfer_callable(transf):
+    kwargs = {'filehandle': FileStorage(stream=BytesIO, filename='test.png'),
+              'metadata': {}, 'validate': True, 'catch_all_errors': False,
+              'destination': 'test.png'}
+    with mock.patch('flask_transfer.Transfer.save') as mocked_save:
+        transf(**kwargs)
+
+    assert mocked_save.called
+    assert mocked_save.call_args == mock.call(**kwargs)

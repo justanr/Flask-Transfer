@@ -211,3 +211,11 @@ class Transfer(object):
         filehandle = self._preprocess(filehandle, metadata)
         destination(filehandle, metadata)
         self._postprocess(filehandle, metadata)
+
+    def __call__(self, filehandle, destination=None, metadata=None,
+                 validate=True, catch_all_errors=False, *args, **kwargs):
+        "Short cut to Transfer.save."
+        return self.save(filehandle=filehandle, destination=destination,
+                         metadata=metadata, validate=validate,
+                         catch_all_errors=catch_all_errors, *args, **kwargs)
+
