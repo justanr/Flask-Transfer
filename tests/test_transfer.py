@@ -5,7 +5,7 @@ import pytest
 try:
     from io import BytesIO
 except ImportError:
-    from BytesIO import BytesIO
+    from StringIO import StringIO as BytesIO
 
 try:
     from unittest import mock
