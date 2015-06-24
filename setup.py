@@ -1,12 +1,24 @@
 from setuptools import setup
 from setuptools.command.test import test as TestCommand
 import sys
+import re
+import ast
 
 try:
-    from unittest import mock
+    from unittest import mock # noqa
     needs_mock = False
 except ImportError:
     needs_mock = True
+
+
+def _get_version():
+    version_re = re.compile(r'__version__=\s+=\s+(.*)')
+
+    with open('flask_transfer/__init__.py', 'rb') as fh:
+        version = ast.literal_eval(version_re.search(fh.read().decode('utf-8'))
+                                   .group(1))
+
+    return str(version)
 
 
 class PyTest(TestCommand):
@@ -61,7 +73,7 @@ if needs_mock:
 if __name__ == "__main__":
     setup(
         name='flask-transfer',
-        version='0.0.1',
+        version=_get_version(),
         author='Alec Nikolas Reiter',
         author_email='alecreiter@gmail.com',
         description='Validate and process file uploads in Flask easily',
