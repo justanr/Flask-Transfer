@@ -165,9 +165,9 @@ class FunctionValidator(BaseValidator):
         return "FunctionValidator({0!r}, catching={1})".format(self._func,
                                                                catching)
 
-    def add_checked_exception(self, exception):
+    def add_checked_exceptions(self, *exceptions):
         "Adds an exception type to catch and convert into an UploadError"
-        self._errors += (exception,)
+        self._errors += exceptions
 
 
 class ExtValidator(BaseValidator):

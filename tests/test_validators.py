@@ -71,11 +71,18 @@ def test_FunctionValidator_accepts_errors_to_catch():
     assert some_validator._errors == (TypeError, ValueError, ZeroDivisionError)
 
 
-def test_FunctionValidator_add_errors_after_creation():
+def test_FunctionValidator_add_error_after_creation():
     some_validator = validators.FunctionValidator(lambda x: x)
-    some_validator.add_checked_exception(ZeroDivisionError)
+    some_validator.add_checked_exceptions(ZeroDivisionError)
 
     assert ZeroDivisionError in some_validator._errors
+
+
+def test_FunctionValidator_add_several_errors_after_creation():
+    some_validator = validators.FunctionValidator(lambda x: x)
+    some_validator.add_checked_exceptions(ZeroDivisionError, RuntimeError)
+
+    assert len(some_validator._errors) == 4
 
 
 def test_FunctionValidator_converts_to_UploadError():
@@ -86,7 +93,7 @@ def test_FunctionValidator_converts_to_UploadError():
     def throw_an_error(filehandle, metadata):
         raise MyException('what a test!')
 
-    throw_an_error.add_checked_exception(MyException)
+    throw_an_error.add_checked_exceptions(MyException)
 
     with pytest.raises(UploadError) as excinfo:
         throw_an_error('', {})
