@@ -1,7 +1,7 @@
-__all__ = ['Transfer']
-
 from werkzeug._compat import string_types
 from .exc import UploadError
+
+__all__ = ['Transfer']
 
 
 def _use_filehandle_to_save(dest):
@@ -13,12 +13,16 @@ def _use_filehandle_to_save(dest):
 
 
 def _make_destination_callable(dest):
+    """Creates a callable out of the destination. If it's already callable,
+    the destination is returned. Instead, if the object is a string or a
+    writable object, it's wrapped in a closure to be used later.
+    """
     if callable(dest):
         return dest
     elif hasattr(dest, 'write') or isinstance(dest, string_types):
         return _use_filehandle_to_save(dest)
     else:
-        raise TypeError("Destination must be a string, writable or callable object.")  #noqa
+        raise TypeError("Destination must be a string, writable or callable object.")
 
 
 class Transfer(object):
@@ -218,4 +222,3 @@ class Transfer(object):
         return self.save(filehandle=filehandle, destination=destination,
                          metadata=metadata, validate=validate,
                          catch_all_errors=catch_all_errors, *args, **kwargs)
-
