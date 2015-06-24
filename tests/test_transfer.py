@@ -69,7 +69,7 @@ def test_writeable_saving():
     with mock.patch('werkzeug.FileStorage.save') as mocked_save:
         dummy_save(filehandle, {'buffer_size': 1})
 
-    mocked_save.assert_called_with(destination, 1)
+    assert mocked_save.call_args == mock.call(destination, 1)
 
 
 def test_string_path_saving():
@@ -80,7 +80,7 @@ def test_string_path_saving():
     with mock.patch('werkzeug.FileStorage.save') as mocked_save:
         dummy_save(filehandle, {'buffer_size': None})
 
-    mocked_save.assert_called_with('test.png', None)
+    assert mocked_save.call_args == mock.call('test.png', None)
 
 
 def test_Transfer_setup_blank():
