@@ -12,11 +12,11 @@ except ImportError:
 
 
 def _get_version():
-    version_re = re.compile(r'__version__=\s+=\s+(.*)')
+    version_re = re.compile(r'__version__\s+=\s+(.*)')
 
     with open('flask_transfer/__init__.py', 'rb') as fh:
-        version = ast.literal_eval(version_re.search(fh.read().decode('utf-8'))
-                                   .group(1))
+        version = ast.literal_eval(
+            version_re.search(fh.read().decode('utf-8')).group(1))
 
     return str(version)
 
