@@ -210,6 +210,9 @@ class AllowedExts(ExtValidator):
                               "".format(filehandle.filename, exts))
         return True
 
+    def __invert__(self):
+        return DeniedExts(*self.exts)
+
 
 class DeniedExts(ExtValidator):
     """Filename extension validator that blacklists certain extensions
@@ -230,6 +233,9 @@ class DeniedExts(ExtValidator):
                               "Extensions denied {1}"
                               "".format(filehandle.filename, exts))
         return True
+
+    def __invert__(self):
+        return AllowedExts(*self.exts)
 
 
 # just a little dynamic instance creation, nothing to see here.

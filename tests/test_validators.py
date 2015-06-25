@@ -63,6 +63,13 @@ def test_AllowedExts_okays():
     assert allowed._validate(DummyFile('awesome.jpg'), {})
 
 
+def test_AllowedExts_inverts():
+    allowed = validators.AllowedExts('jpg', 'png', 'gif')
+    flipped = ~allowed
+    assert isinstance(flipped, validators.DeniedExts)
+    assert allowed.exts == flipped.exts
+
+
 def test_DeniedExts_raises():
     denied = validators.DeniedExts('png')
     with pytest.raises(UploadError) as excinfo:
@@ -74,6 +81,13 @@ def test_DeniedExts_raises():
 def test_DeniedExts_okays():
     denied = validators.DeniedExts('png')
     assert denied._validate(DummyFile('awesome.jpg'), {})
+
+
+def test_DeniedExts_invert():
+    not_allowed = validators.DeniedExts('png', 'jpg', 'gif')
+    flipped = ~not_allowed
+    assert isinstance(flipped, validators.AllowedExts)
+    assert flipped.exts == not_allowed.exts
 
 
 def test_FunctionValidator_wraps():
