@@ -155,20 +155,21 @@ class Transfer(object):
         consisting of all UploadErrors raised.
         """
         errors = []
+        DEFAULT_ERROR_MSG = '{0!r}({1!r}, {2!r}) returned False'
 
         for validator in self._validators:
+            msg = DEFAULT_ERROR_MSG.format(validator, filehandle, metadata)
             try:
-                validator(filehandle, metadata)
-            except UploadError as err:
-                if not catch_all_errors:
-                    raise
+                if not validator(filehandle, metadata):
+                    raise UploadError(msg)
+            except UploadError as e:
+                if catch_all_errors:
+                    errors.append(e.args[0])
                 else:
-                    errors.append(err)
+                    raise
 
         if errors:
-            raise UploadError(*[str(e) for e in errors])
-        else:
-            return True
+            raise UploadError(errors)
 
     def _preprocess(self, filehandle, metadata):
         "Runs all attached preprocessors on the provided filehandle."

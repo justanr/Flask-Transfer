@@ -1,10 +1,18 @@
 from flask_transfer import validators, UploadError
 import pytest
 
+try:
+    from unittest import mock
+except ImportError:
+    import mock
+
 
 class DummyFile(object):
     def __init__(self, filename):
         self.filename = filename
+
+    def __repr__(self):
+        return 'DummyFile(filename={0})'.format(self.filename)
 
 
 def filename_all_lower(filehandle, metadata):
@@ -15,39 +23,165 @@ def filename_all_lower(filehandle, metadata):
 
 
 def test_raise_with_unimplemented_validate():
-    class MyValidator(validators.BaseValidator):
-        pass
-
     with pytest.raises(NotImplementedError) as excinfo:
-        MyValidator()('', {})
+        validators.BaseValidator()('', {})
 
     assert '_validate not implemented' == str(excinfo.value)
 
 
-def test_AndValidator_shortcut():
-    first = validators.BaseValidator()
-    second = validators.BaseValidator()
-    and_validator = first & second
+def test_make_AndValidator():
+    v1, v2 = validators.AllowedExts('jpg'), validators.DeniedExts('png')
+    and_validator = v1 & v2
 
     assert isinstance(and_validator, validators.AndValidator)
-    assert and_validator._first is first and and_validator._second is second
+    assert and_validator._validators == (v1, v2)
 
 
-def test_OrValidator_shortcut():
-    first = validators.BaseValidator()
-    second = validators.BaseValidator()
-    or_validator = first | second
+def test_AndValidator_success():
+    DummyValidator = mock.MagicMock(return_value=True)
+    dummy_file = DummyFile('awesome.jpg')
+    and_validator = validators.AndValidator(DummyValidator,
+                                            DummyValidator)
+    assert and_validator(dummy_file, {})
+    assert DummyValidator.call_count == 2
+    assert DummyValidator.call_args == mock.call(dummy_file, {})
+
+
+def test_AndValidator_failure_with_callable():
+    dummy_file = DummyFile(filename='doesntmatter.exe')
+    truthy = mock.MagicMock(return_value=True)
+    falsey = mock.MagicMock(return_value=False)
+    and_validator = validators.AndValidator(falsey, truthy)
+
+    with pytest.raises(UploadError) as excinfo:
+        and_validator(dummy_file, {})
+
+    assert 'returned false in' in str(excinfo.value)
+    assert falsey.call_count == 1
+    assert falsey.call_args == mock.call(dummy_file, {})
+    assert truthy.call_count == 0
+
+
+def test_AndValidator_failure_with_exception():
+    toss_error = mock.MagicMock(side_effect=UploadError('something bad happened'))
+
+    dummy_file = DummyFile(filename='kindamatters.exe')
+    and_validator = validators.AndValidator(toss_error, toss_error)
+
+    with pytest.raises(UploadError) as excinfo:
+        and_validator(dummy_file, {})
+
+    assert 'something bad happened' == str(excinfo.value)
+
+
+def test_make_OrValidator():
+    v1, v2 = validators.AllowedExts('png'), validators.AllowedExts('jpg')
+    or_validator = v1 | v2
 
     assert isinstance(or_validator, validators.OrValidator)
-    assert or_validator._first is first and or_validator._second is second
+    assert or_validator._validators == (v1, v2)
 
 
-def test_NegatedValidator_shortcut():
-    validator = validators.BaseValidator()
-    negated_validator = ~validator
+def test_OrValidator_success():
+    def only_jpgs(fh, m):
+        return fh.filename.endswith('jpg')
 
-    assert isinstance(negated_validator, validators.NegatedValidator)
-    assert negated_validator._validator is validator
+    def only_pngs(fh, m):
+        return fh.filename.endswith('png')
+
+    or_validator = validators.OrValidator(only_jpgs, only_pngs)
+
+    assert or_validator(DummyFile(filename='awesome.png'), {})
+    assert or_validator(DummyFile(filename='awesome.jpg'), {})
+
+
+def test_OrValidator_failure_with_callable():
+    falsey = mock.MagicMock(return_value=False)
+    or_validator = validators.OrValidator(falsey, falsey)
+
+    with pytest.raises(UploadError) as excinfo:
+        or_validator(DummyFile(filename='wolololo.wav'), {})
+
+    assert falsey.call_count == 2
+    assert len(excinfo.value.args[0]) == 2
+    assert 'returned false in' in excinfo.value.args[0][0]
+
+
+def test_OrValidator_failure_with_exception():
+    toss_error = mock.MagicMock(side_effect=UploadError('something bad happened'))
+
+    or_validator = validators.OrValidator(toss_error, toss_error, toss_error)
+    with pytest.raises(UploadError) as excinfo:
+        or_validator(DummyFile(filename='wolololo.wav'), {})
+
+    assert toss_error.call_count == 3
+    assert len(excinfo.value.args[0]) == 3
+    assert all('something bad happened' == e for e in excinfo.value.args[0])
+
+
+def test_make_NegatedValidator():
+    class MyValidator(validators.BaseValidator):
+        def _validate(fh, m):
+            return False
+
+    mv = MyValidator()
+    negated_mv = ~mv
+
+    assert isinstance(negated_mv, validators.NegatedValidator)
+    assert negated_mv._nested is mv
+
+
+def test_NegatedValidator_turns_false_to_true():
+    my_negated = validators.NegatedValidator(lambda fh, m: False)
+    assert my_negated(DummyFile(filename='cat.lol'), {})
+
+
+def test_NegatedValidator_turns_UploadError_to_true():
+    def toss_error(fh, m):
+        raise UploadError('never actually seen')
+
+    my_negated = validators.NegatedValidator(toss_error)
+    assert my_negated(DummyFile(filename='awesome.sh'), {})
+
+
+def test_NegatedValidator_raises_on_failure():
+    def truthy(fh, m):
+        return True
+
+    my_negated = validators.NegatedValidator(truthy)
+
+    with pytest.raises(UploadError) as excinfo:
+        my_negated(DummyFile(filename='perfectlyokay.php'), {})
+
+    assert 'returned false' in str(excinfo.value)
+
+
+def test_FunctionValidator_wraps():
+    my_func_validator = validators.FunctionValidator(filename_all_lower)
+    # don't bother with qualname/annotations because 2.6/2.7 compat
+    assert my_func_validator.__name__ == filename_all_lower.__name__
+    assert my_func_validator.__doc__ == filename_all_lower.__doc__
+    assert my_func_validator.__module__ == filename_all_lower.__module__
+
+
+def test_FunctionValidator_as_decorator():
+    @validators.FunctionValidator
+    def do_nothing(fh, m):
+        return True
+
+    assert isinstance(do_nothing, validators.FunctionValidator)
+    assert do_nothing.__name__ == 'do_nothing'
+
+
+def test_FuncionValidator_validates():
+    fake = mock.Mock(return_value=True)
+    fake.__name__ = fake.__doc__ = fake.__module__ = ''
+    fake_file = DummyFile(filename='inconceivable.py')
+
+    my_func_validator = validators.FunctionValidator(fake)
+    my_func_validator(fake_file, {})
+
+    assert fake.call_args == mock.call(fake_file, {})
 
 
 def test_AllowedExts_raises():
@@ -63,11 +197,10 @@ def test_AllowedExts_okays():
     assert allowed._validate(DummyFile('awesome.jpg'), {})
 
 
-def test_AllowedExts_inverts():
-    allowed = validators.AllowedExts('jpg', 'png', 'gif')
-    flipped = ~allowed
-    assert isinstance(flipped, validators.DeniedExts)
-    assert allowed.exts == flipped.exts
+def test_invert_AllowedExts():
+    exts = frozenset(['jpg', 'png', 'gif'])
+    flipped = ~validators.AllowedExts(*exts)
+    assert isinstance(flipped, validators.DeniedExts) and flipped.exts == exts
 
 
 def test_DeniedExts_raises():
@@ -83,94 +216,7 @@ def test_DeniedExts_okays():
     assert denied._validate(DummyFile('awesome.jpg'), {})
 
 
-def test_DeniedExts_invert():
-    not_allowed = validators.DeniedExts('png', 'jpg', 'gif')
-    flipped = ~not_allowed
-    assert isinstance(flipped, validators.AllowedExts)
-    assert flipped.exts == not_allowed.exts
-
-
-def test_FunctionValidator_wraps():
-    checked = ('__name__', '__doc__', '__module__',
-               '__qualname__', '__annotations__')
-    wrapped = validators.FunctionValidator(filename_all_lower)
-
-    # fill in __qualname__ and __annotations__ in Python 2.6/2.7
-    missing = object()
-    assert all([getattr(wrapped, c, missing) ==
-                getattr(filename_all_lower, c, missing)
-                for c in checked])
-
-
-def test_FunctionValidator_okays():
-    wrapped = validators.FunctionValidator(filename_all_lower)
-    assert wrapped._validate(DummyFile('awesome.jpg'), {})
-
-
-def test_FunctionValidator_as_decorator():
-    @validators.FunctionValidator
-    def my_func(filehandle, metadata):
-        pass
-
-    assert isinstance(my_func, validators.FunctionValidator)
-
-
-def test_FunctionValidator_accepts_errors_to_catch():
-    some_validator = validators.FunctionValidator(lambda x: x, ZeroDivisionError)
-
-    assert some_validator._errors == (TypeError, ValueError, ZeroDivisionError)
-
-
-def test_FunctionValidator_add_error_after_creation():
-    some_validator = validators.FunctionValidator(lambda x: x)
-    some_validator.add_checked_exceptions(ZeroDivisionError)
-
-    assert ZeroDivisionError in some_validator._errors
-
-
-def test_FunctionValidator_add_several_errors_after_creation():
-    some_validator = validators.FunctionValidator(lambda x: x)
-    some_validator.add_checked_exceptions(ZeroDivisionError, RuntimeError)
-
-    assert len(some_validator._errors) == 4
-
-
-def test_FunctionValidator_converts_to_UploadError():
-    class MyException(Exception):
-        pass
-
-    @validators.FunctionValidator
-    def throw_an_error(filehandle, metadata):
-        raise MyException('what a test!')
-
-    throw_an_error.add_checked_exceptions(MyException)
-
-    with pytest.raises(UploadError) as excinfo:
-        throw_an_error('', {})
-
-    assert excinfo.errisinstance(UploadError)
-    assert 'what a test!' == excinfo.value.args[0]
-
-
-@pytest.mark.parametrize('first, second, result', [
-    (True, True, True), (False, True, True),
-    (False, False, False), (True, False, True)
-])
-def test_OrValidator(first, second, result):
-    orer = validators.OrValidator(lambda f, m: first, lambda f, m: second)
-    assert orer('', {}) == result
-
-
-@pytest.mark.parametrize('first, second, result', [
-    (True, True, True), (False, False, False),
-    (True, False, False), (False, True, False)
-])
-def test_AndValidator(first, second, result):
-    ander = validators.AndValidator(lambda f, m: first, lambda f, m: second)
-    assert ander('', {}) == result
-
-
-def test_NegatedValidator():
-    negated = validators.NegatedValidator(lambda f, m: True)
-    assert not negated('', {})
-    assert validators.NegatedValidator(negated)('', {})
+def test_invert_DeniedExts():
+    exts = frozenset(['jpg', 'gif', 'png'])
+    flipped = ~validators.DeniedExts(*exts)
+    assert isinstance(flipped, validators.AllowedExts) and flipped.exts == exts

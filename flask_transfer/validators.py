@@ -1,24 +1,30 @@
 """
 """
 from functools import update_wrapper
-from os.path import splitext
 from .exc import UploadError
+import os
 
 
 class BaseValidator(object):
     """BaseValidator class for flask_transfer. Provides utility methods for
     combining validators together. Subclasses should implement `_validates`.
 
-    When called, the validator will catch TypeError and ValueError wrap them
-    in UploadError. Other validators should explictly catch expected error and
-    reraise UploadError.
-    """
+    Validators can signal failure in one of two ways:
+        * Raise UploadError with a message
+        * Return non-Truthy value.
 
+    Raising UploadError is the preferred method, as it allows a more descriptive
+    message to reach the caller, however by supporting returning Falsey values,
+    lambdas can be used as validators as well.
+    """
     def _validate(self, filehandle, metadata):
         raise NotImplementedError("_validate not implemented")
 
     def __call__(self, filehandle, metadata):
         return self._validate(filehandle, metadata)
+
+    def __repr__(self):
+        return self.__class__.__name__
 
     def __and__(self, other):
         return AndValidator(self, other)
@@ -29,145 +35,173 @@ class BaseValidator(object):
     def __invert__(self):
         return NegatedValidator(self)
 
-    def __repr__(self):
-        return self.__class__.__name__
-
 
 class AndValidator(BaseValidator):
-    """Validator representing a condition where both validators must be true.
-    flask_transfer validators can be combined in this fashion with the bitwise
-    `&` operator.
+    """Combination validator analogous to the builtin `all` function. Every
+    nested validator must return Truthy or the entire validator is considered
+    False.
+
+    On its own, AndValidator is redundant with how validators are run, however,
+    it's useful when combined with `OrValidator` or `NegatedValidator`.
 
     .. code-block:: python
 
-        # trivial example: An existing set of allowed extensions
-        # combined with a new set of denied extensions
-        Images = AllowedExts("jpg", "gif", "png", "psd") # etc
-        NoPSDs = DeniedExts("psd")
-        ImagesButNoPSDs = Images & NoPSDs
-    """
+        ImagesButNotPSD = AndValidator(AllowedExts('gif', 'png', 'jpg'), # etc
+                                       DeniedExts('psd'))
+        ImagesButNotPSD(DummyFile(filename='awesome.png')) # True
+        ImagesButNotPSD(DummyFile(filename='awesome.psd')) # UploadError(...)
 
-    def __init__(self, first, second):
-        self._first, self._second = first, second
+    It's also possible to shortcut to creating an AndValidator by using the
+    logical/bitwise and (`&`) operator.
+
+    .. code-block:: python
+
+        ImagesButNotPSD = AllowedExts('png', 'gif', 'jpg') & DeniedExts('psd')
+
+    This shortcut is available to any validator inheriting from BaseValidator.
+    However, when combining many nested validators together, it's better to
+    use the explicit constructor.
+
+    .. code-block:: python
+
+        # Ends up nesting an AndValidator inside another
+        AllowedExts('png') & DeniedExts('psd') & MyValidator()
+
+        # Creates a flat AndValidator
+        AndValidator(AllowedExts('png'), DeniedExts('psd'), MyValidator())
+    """
+    def __init__(self, *validators):
+        self._validators = validators
 
     def _validate(self, filehandle, metadata):
-        return self._first(filehandle, metadata) and \
-            self._second(filehandle, metadata)
+        msg = '{0!r}({1!r}, {2!r}) returned false in {3!r}'
+        for validator in self._validators:
+            if not validator(filehandle, metadata):
+                raise UploadError(msg.format(validator, filehandle,
+                                             metadata, self))
+        return True
 
     def __repr__(self):
-        return "AndValidator({0!r}, {1!r})".format(self._first, self._second)
+        validators = ', '.join([repr(v) for v in self._validators])
+        return 'AndValidator({0})'.format(validators)
 
 
 class OrValidator(BaseValidator):
-    """Validator representing a condition where either validator must be true.
-    flask_transfer validators can be combined in this fashion with the bitwise
-    `|` operator.
+    """Combination validator analogous to the builtin `any` function. As long as
+    a single nested validator returns True, so does this validator.
 
     .. code-block:: python
 
-        Images = AllowedExts("jpg", "gif", "png")
-        Text = AllowedExts("txt", "json", "md", "rst")
-        ImagesOrText = Images | Text
-    """
+        ImagesOrText = OrValidator(AllowedExts('jpg', 'png' 'gif'), # etc
+                                   AllowedExts('txt'))
+        ImagesOrText(DummyFile(filename='awesome.txt')) # True
+        ImagesOrText(DummyFile(filename='awesome.png')) # True
+        ImagesOrText(DummyFile(filename='notawesome.doc')) # UploadError(...)
 
-    def __init__(self, first, second):
-        self._first, self._second = first, second
+    It's also possible to shortcut to creating an OrValidator by using the
+    logical/bitwise or (`|`) operator.
+
+    .. code-block:: python
+
+        ImagesOrText = AllowedExts('png', 'jpg', 'gif') | AllowedExts('txt')
+
+    This shortcut exists on every validator inheriting from BaseValidator.
+    However, when chaining many validator together, it's better to use the
+    explicit constructor rather than the shortcut.
+
+    .. code-block:: python
+
+        # nests an OrValidator inside of another
+        AllowedExts('png') | AllowedExts('txt') | MyValidator()
+
+        # creates a flat validator
+        OrValidator(AllowedExts('png'), AllowedExts('txt'), MyValidator())
+    """
+    def __init__(self, *validators):
+        self._validators = validators
 
     def _validate(self, filehandle, metadata):
-        return self._first(filehandle, metadata) or \
-            self._second(filehandle, metadata)
+        errors = []
+        msg = '{0!r}({1!r}, {2!r}) returned false in {3!r}.'
+        for validator in self._validators:
+            try:
+                if not validator(filehandle, metadata):
+                    raise UploadError(msg.format(validator, filehandle,
+                                                 metadata, self))
+            except UploadError as e:
+                errors.append(e.args[0])
+            else:
+                return True
+        raise UploadError(errors)
 
     def __repr__(self):
-        return "OrValidator({0!r}, {1!r})".format(self._first, self._second)
+        validators = ', '.join([repr(v) for v in self._validators])
+        return 'OrValidator({0})'.format(validators)
 
 
 class NegatedValidator(BaseValidator):
-    """Validators that represents the opposite of its internal validator.
-    flask_transfer validators can be negated in this fashion with the bitwise
-    `~` unary operator.
+    """Flips a validation failure into a success and validator success into
+    failure. This is analogous to the `not` keyword (or `operator.not_`
+    function). If the nested validator returns False or raises UploadError,
+    NegatedValidator instead returns True. However, if the nested returns True,
+    it raises an UploadError instead.
 
     .. code-block:: python
 
-        Images = AllowedExts("jpg", "png", "gif")
-        # same as creating DeniedExts("jpg", "png", "gif")
-        NoImages = ~Images
+        NotImages = NegatedValidator(AllowedExts('png', 'jpg', 'gif'))
+        NotImages(DummyFile(filename='awesome.txt')) # True
+        NotImages(DummyFile(filename='awesome.png')) # UploadError(...)
 
-    :NOTE: `~` was chosen because it is *always* unary, unlike `-` which might
-        be an unary or a binary operator.
+    There is also an operator shortcut: the logical/bitwise inversion (`~`)
+    operator. The reason `~` was chosen over `-` is that inversion is *always*
+    unary, where as `-` may be unary or binary depending on surrounding context,
+    using logical inversion also keeps it in theme with AndValidator and
+    OrValidator.
+
+    .. code-block:: python
+
+        ~OrValidator(AllowedExts('png'), AllowedExts('txt'))
+        # NegatedValidator(OrValidator(AllowedExts('png'), AllowedExts('txt')))
+
+    This shortcut exists on every validator inheriting from BaseValidator.
+    However, there is special behavior for `AllowedExts` and `DeniedExts` which
+    simply flip between one another when used with the invert operator.
+
+    .. code-block:: python
+
+        ~AllowedExts('png') # becomes DeniedExts('png')
+        ~DeniedExts('txt') # becomes AllowedExts('txt')
     """
-    def __init__(self, validator):
-        self._validator = validator
-
-    def _validate(self, filehandle, metadata):
-        return not self._validator(filehandle, metadata)
-
-    def __repr__(self):
-        return "NegatedValidator({!r})".format(self._validator)
-
-
-class FunctionValidator(BaseValidator):
-    """Used to lift a function into the validator environment, allowing it to
-    access the &, | and ~ shortcuts for combination and negation.
-
-    FunctionValidator presents as the wrapped function.
-
-    .. code-block:: python
-
-        def check_filename_length(filehandle):
-            return len(filehandle.filename) >= 5
-
-        CheckFilenameLength = FunctionValidator(check_filename_length)
-        assert CheckFilenameLength.__name__ == check_filename__length.__name__
-
-    FunctionValidator can also be used a decorator as well
-
-    .. code-block:: python
-
-        @FunctionValidator
-        def check_filename_length(filehandle):
-            return len(filehandle.filename) >= 5
-
-    `FunctionValidator` can optionally accept exceptions to catch and convert
-    into `UploadErrors` as well. By default, FunctionValidator catches
-    TypeError and ValueError, so adding these are redundant.
-
-    .. code-block:: python
-
-        FunctionValidator(check_filename_length, IndexError, TypeError)
-
-
-    Additionally, individual errors can be added after the fact if needed. This
-    can be useful if `FunctionValidator` is used as a decorator, since the
-    errors are passed positionally.
-
-        .. code-block:: python
-
-        @FunctionValidator
-        def my_validator(filehandle, metadata):
-            raise ZeroDivisionError('an example')
-
-        my_validator.add_checked_exception(ZeroDivisionError)
-
-    """
-    def __init__(self, func, *errors):
-        update_wrapper(self, func)
-        self._func = func
-        self._errors = (TypeError, ValueError) + errors
+    def __init__(self, nested):
+        self._nested = nested
 
     def _validate(self, filehandle, metadata):
         try:
-            return self._func(filehandle, metadata)
-        except self._errors as e:
-            raise UploadError(*e.args)
+            if not self._nested(filehandle, metadata):
+                return True
+        except UploadError:
+            # UploadError would only be raised to signal a failed condition
+            # but we want to flip a False into a True anyways.
+            return True
+        # looks strange that we're tossing an error out if we reach here
+        # but we'll need to signal a failure to the caller with some information
+        msg = '{0!r}({1!r}, {2!r}) returned false'
+        raise UploadError(msg.format(self, filehandle, metadata))
 
     def __repr__(self):
-        catching = [e.__name__ for e in self._errors]
-        return "FunctionValidator({0!r}, catching={1})".format(self._func,
-                                                               catching)
+        return 'NegatedValidator({0!r})'.format(self._nested)
 
-    def add_checked_exceptions(self, *exceptions):
-        "Adds an exception type to catch and convert into an UploadError"
-        self._errors += exceptions
+
+class FunctionValidator(BaseValidator):
+    def __init__(self, wrapped):
+        update_wrapper(self, wrapped)
+        self._nested = wrapped
+
+    def _validate(self, filehandle, metadata):
+        return self._nested(filehandle, metadata)
+
+    def __repr__(self):
+        return 'FunctionValidator({0!r})'.format(self._nested)
 
 
 class ExtValidator(BaseValidator):
@@ -187,7 +221,7 @@ class ExtValidator(BaseValidator):
     @staticmethod
     def _getext(filename):
         "Returns the lowercased file extension."
-        return splitext(filename)[-1][1:].lower()
+        return os.path.splitext(filename)[-1][1:].lower()
 
 
 class AllowedExts(ExtValidator):
@@ -203,11 +237,11 @@ class AllowedExts(ExtValidator):
 
     """
     def _validate(self, filehandle, metadata):
-        if not self._getext(filehandle.filename) in self.exts:
+        if self._getext(filehandle.filename) not in self.exts:
             exts = ', '.join(self.exts)
-            raise UploadError("{0} has an invalid extension. "
-                              "Extensions allowed {1}"
-                              "".format(filehandle.filename, exts))
+            msg = '{0} has an invalid extension, allowed extensions: {1}'
+            raise UploadError(msg.format(filehandle.filename, exts))
+
         return True
 
     def __invert__(self):
@@ -229,9 +263,9 @@ class DeniedExts(ExtValidator):
     def _validate(self, filehandle, metadata):
         if self._getext(filehandle.filename) in self.exts:
             exts = ', '.join(self.exts)
-            raise UploadError("{0} has an invalid extension. "
-                              "Extensions denied {1}"
-                              "".format(filehandle.filename, exts))
+            msg = '{0} has an invalid extension, denied extensions {1}'
+            raise UploadError(msg.format(filehandle.filename, exts))
+
         return True
 
     def __invert__(self):

@@ -24,7 +24,7 @@ class ReportingTransfer(transfer.Transfer):
         self._validated = False
         self._preprocessed = False
         self._postprocessed = False
-        self._saved = None
+        self._saved = False
 
     def _validate(self, fh, meta):
         self._validated = True
@@ -70,6 +70,7 @@ def test_writeable_saving():
     with mock.patch('werkzeug.FileStorage.save') as mocked_save:
         dummy_save(filehandle, {'buffer_size': 1})
 
+    assert mocked_save.call_count == 1
     assert mocked_save.call_args == mock.call(destination, 1)
 
 
@@ -140,14 +141,28 @@ def test_Transfer_save_raises_with_no_destination(transf):
 
 
 def test_Transfer_validate(transf):
-    @transf.validator
-    def suitable_contents(filehandle, meta):
-        res = filehandle.read() == b'Hello World'
-        filehandle.seek(0)
-        return res
-
+    validator = mock.MagicMock()
     source = FileStorage(stream=BytesIO(b'Hello World'))
-    assert transf._validate(source, {})
+    transf.validator(validator)
+    transf._validate(source, {})
+
+    assert validator.call_args == mock.call(source, {})
+
+
+def test_Transfer_validate_raises_with_falsey(transf):
+    source = FileStorage(stream=BytesIO(), filename='test.conf')
+
+    @transf.validator
+    def bad_validator(fh, m): False
+
+    with pytest.raises(UploadError) as excinfo:
+        transf.save(source, metadata={}, catch_all_errors=False,
+                    destination=lambda *a, **k: None)
+
+    expected = "{0!r}({1!r}, {2!r}) returned False".format(bad_validator,
+                                                           source, {})
+
+    assert str(excinfo.value) == expected
 
 
 def test_Transfer_validate_catch_all_errors(transf):
@@ -159,7 +174,7 @@ def test_Transfer_validate_catch_all_errors(transf):
     with pytest.raises(UploadError) as excinfo:
         transf._validate('', {}, catch_all_errors=True)
 
-    assert str(excinfo.value) == "('error', 'error')"
+    assert excinfo.value.args[0] == ['error', 'error']
 
 
 def test_Transfer_validate_bail_on_first_error(transf):
