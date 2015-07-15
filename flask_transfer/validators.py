@@ -225,7 +225,7 @@ class ExtValidator(BaseValidator):
 
 
 class AllowedExts(ExtValidator):
-    """Filename extension validator that whitelights certain extensions
+    """Filename extension validator that whitelists certain extensions
 
     .. code-block:: python
 
