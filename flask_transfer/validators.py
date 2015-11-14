@@ -275,7 +275,7 @@ class DeniedExts(ExtValidator):
 # just a little dynamic instance creation, nothing to see here.
 AllowAll = type('All', (BaseValidator,), {'_validate': lambda *a, **k: True,
                                           '__repr__': lambda _: 'All',
-                                          '__doc__': 'Allows everything.'})()
+                                          '__doc__': 'Allows everything.'})
 DenyAll = type('Deny', (BaseValidator,), {'_validate': lambda *a, **k: False,
                                           '__repr__': lambda _: 'Deny',
-                                          '__doc__': 'Denies everything.'})()
+                                          '__doc__': 'Denies everything.'})
