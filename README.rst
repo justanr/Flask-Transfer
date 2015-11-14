@@ -2,9 +2,8 @@
 Flask-Transfer
 ==============
 
-Validate, process and persist uploaded files through a single object
-instead of cramming all that stuff into your routes or writing your own
-pipeline for it.
+Validate, process and persist file uploads easily through a single
+object instead of cramming all that stuff into your routes.
 
 Tired of this?
 --------------
@@ -12,92 +11,97 @@ Tired of this?
 .. code:: python
 
     @app.route('/upload', methods=['GET', 'POST'])
-    def upload():
-        form = UploadForm()
+    def handle_upload():
+        form = FileUploadForm()
         
         if form.validate_on_submit():
             filehandle = form.uploaded.data
-            allowed_exts = ('txt', 'md', 'rst')
+            allowed_exts = ('md', 'txt', 'rst')
             if not os.path.splitext(filehandle.filename)[1] in allowed_exts:
-                raise UploadError('File type not allowed!')
-            if filehandle.read() != b'hello world':
-                raise UploadError('File contents not allowed!')
-            # back to beginning
-            filehandle.seek()
+                raise SomeError('Unallowed extension!')
+            if filehandle.read() != b'Hello World!':
+                raise SomeError('File contents not allowed!')
+            filehandle.seek(0)
+            
             username = g.current_user.name
-            upload_path = current_app.config['UPLOAD_DIR']
-            fullpath = os.path.join(upload_path, username, filehandle.filename)
-            filehandle.save(fullpath)
-            flash("Uploaded {}!".format(filehandle.filename))
-            return redirect(url_for("upload"))
+            upload_dir = current_app.config['UPLOAD_DIR']
+            full_path = os.path.join(upload_dir, username, secure_filename(filehandle.filename))
+            filehandle.save(full_path)
+            flash("Uploaded {}!".format(filehandle.filename), 'success')
+            return redirect(url_for('handle_upload'))
         else:
             return render_template('upload.html', form=form)
 
-Heaven forbid if you need to other validation -- will this file upload
-exceed the user's allotment? -- or processing -- gotta make thumbnails,
-shove info into the database, etc. Of course, you're a good programmer
-and broke all that logic into separate functions...right?
+That's a mess. Your test runner is literally running away from you.
+There's like four or five different things going on in this single
+route! Argh.
 
-Wouldn't it be nice to place all the validating, processing and saving
-logic in one object and just let that handle it for you?
-
-Do this instead
----------------
+There's a better way
+--------------------
 
 .. code:: python
 
-    from flask_transfer import Transfer, AllowedExts, UploadError
-
-    def _save_to_user_dir(filehandle):
-        current_user = g.current_user
+    from flask_transfer import Transfer, UploadError
+    from flask_transfer.validators import AllowedExts
+    
+    TextFileTransfer = Transfer(validators=[AllowedExts('md', 'rst', 'txt')])
+    
+    @TextFileTransfer.destination
+    def save_to_user_dir(filehandle, metadata):
+        username = g.current_user.name
         upload_path = current_app.config['UPLOAD_DIR']
-        fullpath = os.path.join(upload_path, current_user, filehandle.filename)
-        filehandle.save(fullpath)
-
-
-    TextDocuments = AllowedExts('txt', 'md', 'rst')
-    TextTransfer = Transfer(validators=[TextDocuments], destination=_save_to_user_dir)
-
-    @TextTransfer.validator
-    def check_stream_contents(filehandle, metadata):
-        if filehandle.read() != metadata['approved_contents']:
-            raise UploadError('File contents not allowed')
-        filehandle.seek()
+        full_path = os.path.join(upload_dir, username, secure_filename(filehandle.filename))
+        filehandle.save(full_path)
+    
+    
+    @TextFileTransfer.validator
+    def check_file_contents(filehandle, metadata):
+        if filehandle.read() != metadata['allowed_contents']:
+            raise UploadError('File contents not allowed!')
+        filehandle.seek(0)
         return True
-
+    
+    
     @app.route('/upload', methods=['GET', 'POST'])
-    def upload():
-        form = UploadForm()
+    def handle_upload():
+        form = FileUploadForm()
         
         if form.validate_on_submit():
             filehandle = form.uploaded.data
-            TextTransfer.save(filehandle, {})
-            flash('Uploaded {}!'.format(filehandle.filename))
-            return redirect(url_for('uploaded'))
+            TextFileTransfer.save(filehandle, metadata={'allowed_contents': b'Hello World!'})
+            flash('Uploaded {}!'.format(filehandle.filename), 'success')
+            return redirect(url_for('handle_upload'))
         else:
             return render_template('upload.html', form=form)
 
-Check out the `quickstart <quickstart.rst>`__ for some more information,
-as well!
+Aaaah. Sure, it's a little bit more code. But it's separated out into
+bits and pieces. It's easy to test each bit and the intent in the route
+is very clear.
 
 More Power
 ----------
 
 Flask-Transfer supplies hooks for validation, preprocessing and
-postprocessing via decorators. Need to create thumbnails of images? Just
-supply a resizer to the ``Transfer.preprocessor`` or
-``Transfer.postprocessor`` hooks.
+postprocessing file uploads via decorators. If you need to always create
+thumbnails of uploaded images, you can supply a callable to
+``MyTransfer.preprocessor`` or ``MyTransfer.postprocessor`` that'll do
+that for you.
 
-Validation beyond just checking file extensions is at your fingertips as
-well. Look at the current user's disk usage and see if the upload would
-exceed the maximum. Just supply a callable to the ``Transfer.validator``
-hook.
+And validation beyond just simple extension checking is at your
+fingertips as well. Perhaps, you've limited your user to a certain
+amount of disk space and they should be told to delete data before
+uploading more. Write a simple function to check current disk usage and
+if the upload would exceed the cap. Then hook it to your Transfer object
+with ``MyTransfer.validator``.
 
-Maybe you're running on Heroku and you can't persist to the local
-filesystem. Create a callable or writable object that'll pipe that data
-off to your S3 or Dropbox or the database (oh good god don't do this)
-and use that as the destination. Flask-Transfer handles using callables,
-writables and string file paths all behind the scenes for you.
+Finally, persisting files is easy! Maybe you're running on Heroku and
+can't rely on the local filesystem. Just write a callable that'll pass
+the file to your S3 bucket! Hook it in with ``MyTransfer.destination``.
+Flask-Transfer handles using string paths and writable objects as
+destinations as well.
+
+Check out the `quickstart <quickstart.rst>`__ for some more information,
+as well!
 
 Todo
 ----

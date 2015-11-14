@@ -13,12 +13,44 @@ Destinations
 
 As mentioned before, destinations can be callables, writables or string
 file paths (and the preference is in that order, too). The conversion to
-a common interface is done behind the scenes for you. There's also two
-locations destinations can be provided:
+a common interface is done behind the scenes for you. There's also three
+ways destinations can be provided, in order of preference:
+
+-  When calling ``Transfer.save``, provide the destination keyword
+   argument
+
+.. code:: python
+
+    MyTransfer = Transfer()
+    MyTransfer.save(filehandle, metadata, destination='somewhere')
+
+-  Use the ``@Transfer.destination`` callable -- either as a decorator
+   or a method call. This callable will accept functions, strings and
+   writable objects and handle all the behind the scenes conversion for
+   you.
+
+.. code:: python
+
+    MyTransfer = Transfer()
+
+    @MyTransfer.destination
+    def storeit(filehandle, metadata):
+        # do stuff...
+        return filehandle
+
+    #OR
+
+    MyTransfer.destination('~/')
+
+    #OR
+
+    MyTransfer.destination(BytesIO())
 
 -  At instance creation, to provide a "default" destination.
--  When calling ``Transfer.save`` to provide a more preferential
-   destination.
+
+.. code:: python
+
+    MyTransfer = Transfer(destination='~/')
 
 Other stuff
 ~~~~~~~~~~~
@@ -71,8 +103,10 @@ both do what you think and creating them is easy peasy:
 Function Validators
 ~~~~~~~~~~~~~~~~~~~
 
-Already have a perfectly good callable that validates files for you?
-Just lift into the Flask-Transfer validator context like this:
+If you already have a perfectly good function or callable that fits
+Flask-Transfer's validator protocol, but you want to take advantage of
+the ability to combine validators together with ``&`` and ``|``, you can
+use ``FunctionValidator`` to lift your callable into this context:
 
 .. code:: python
 
