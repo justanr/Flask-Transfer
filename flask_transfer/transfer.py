@@ -158,9 +158,9 @@ class Transfer(object):
         DEFAULT_ERROR_MSG = '{0!r}({1!r}, {2!r}) returned False'
 
         for validator in self._validators:
-            msg = DEFAULT_ERROR_MSG.format(validator, filehandle, metadata)
             try:
                 if not validator(filehandle, metadata):
+                    msg = DEFAULT_ERROR_MSG.format(validator, filehandle, metadata)
                     raise UploadError(msg)
             except UploadError as e:
                 if catch_all_errors:
@@ -215,7 +215,8 @@ class Transfer(object):
 
         filehandle = self._preprocess(filehandle, metadata)
         destination(filehandle, metadata)
-        self._postprocess(filehandle, metadata)
+        filehandle = self._postprocess(filehandle, metadata)
+        return filehandle
 
     def __call__(self, filehandle, destination=None, metadata=None,
                  validate=True, catch_all_errors=False, *args, **kwargs):

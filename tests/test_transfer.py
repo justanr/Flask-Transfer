@@ -231,7 +231,7 @@ def test_Transfer_save_toggle_validate():
 
 
 def test_Transfer_callable(transf):
-    kwargs = {'filehandle': FileStorage(stream=BytesIO, filename='test.png'),
+    kwargs = {'filehandle': FileStorage(stream=BytesIO(), filename='test.png'),
               'metadata': {}, 'validate': True, 'catch_all_errors': False,
               'destination': 'test.png'}
     with mock.patch('flask_transfer.Transfer.save') as mocked_save:
@@ -239,3 +239,15 @@ def test_Transfer_callable(transf):
 
     assert mocked_save.called
     assert mocked_save.call_args == mock.call(**kwargs)
+
+
+def test_nest_Transfer_objs():
+    Outer = transfer.Transfer()
+    Inner = ReportingTransfer()
+
+    Outer.postprocessor(Inner)
+
+    dummy_file = FileStorage(stream=BytesIO(), filename='derp.png')
+    Outer.save(dummy_file, metadata={}, destination=lambda *a, **k: True)
+
+    assert Inner.verify()
