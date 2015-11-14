@@ -4,12 +4,6 @@ import sys
 import re
 import ast
 
-try:
-    from unittest import mock # noqa
-    needs_mock = False
-except ImportError:
-    needs_mock = True
-
 
 def _get_version():
     version_re = re.compile(r'__version__\s+=\s+(.*)')
@@ -19,27 +13,6 @@ def _get_version():
             version_re.search(fh.read().decode('utf-8')).group(1))
 
     return str(version)
-
-
-class PyTest(TestCommand):
-    # Taken from py.test setuptools integration page
-    # http://pytest.org/latest/goodpractices.html
-
-    user_options = [('pytest-args=', 'a', 'Arguments to pass to py.test')]
-
-    def initialize_options(self):
-        TestCommand.initialize_options(self)
-        self.pytest_args = []
-
-    def finialize_options(self):
-        TestCommand.finalize_options(self)
-        self.test_args = []
-        self.test_suite = True
-
-    def run_tests(self):
-        import pytest
-        errno = pytest.main(self.pytest_args)
-        sys.exit(errno)
 
 
 class ToxTest(TestCommand):
@@ -63,11 +36,6 @@ class ToxTest(TestCommand):
 
         errno = tox.cmdline(args=args)
         sys.exit(errno)
-
-tests_require = ['pytest', 'tox']
-
-if needs_mock:
-    tests_require.append('mock')
 
 
 if __name__ == "__main__":
@@ -93,6 +61,6 @@ if __name__ == "__main__":
         ],
         install_requires=['Flask'],
         test_suite='test',
-        tests_require=tests_require,
-        cmdclass={'pytest': PyTest, 'tox': ToxTest},
+        tests_require=['tox'],
+        cmdclass={'tox': ToxTest},
     )
